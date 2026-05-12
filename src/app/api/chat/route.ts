@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAllEntries } from "@/lib/excel";
-import { getSettings, getTotalFixedCosts } from "@/lib/settings";
 import { readNotionPage } from "@/lib/notion";
+import { FinanceEntry, Settings } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,12 +9,19 @@ export const runtime = "nodejs";
 const client = new Anthropic();
 
 export async function POST(req: Request) {
-  const { messages, includeNotion } = await req.json();
+  const { messages, includeNotion, entries, settings } = await req.json() as {
+    messages: { role: string; content: string }[];
+    includeNotion?: boolean;
+    entries?: Record<string, FinanceEntry[]>;
+    settings?: Settings;
+  };
 
-  // Gather all financial context
-  const settings = getSettings();
-  const allEntries = getAllEntries();
-  const fixedCosts = getTotalFixedCosts(settings);
+  const allEntries: Record<string, FinanceEntry[]> = entries || {};
+  const s: Settings = settings || { expectedMonthlyIncome: 0, salaries: [], recurringExpenses: [], currency: "INR" };
+
+  const salaryTotal = s.salaries.reduce((sum, x) => sum + x.amount, 0);
+  const expenseTotal = s.recurringExpenses.reduce((sum, x) => sum + x.amount, 0);
+  const fixedCosts = salaryTotal + expenseTotal;
 
   let notionContent = "";
   if (includeNotion && process.env.NOTION_FINANCE_PAGE_ID) {
@@ -25,28 +31,28 @@ export async function POST(req: Request) {
   const systemPrompt = `You are the AI financial advisor for Adchemy, a digital agency. You have access to all financial data and can provide insights, projections, and recommendations.
 
 ## Settings
-- Expected Monthly Income: ${settings.currency} ${settings.expectedMonthlyIncome}
-- Currency: ${settings.currency}
-- Total Fixed Monthly Costs: ${settings.currency} ${fixedCosts}
+- Expected Monthly Income: ${s.currency} ${s.expectedMonthlyIncome}
+- Currency: ${s.currency}
+- Total Fixed Monthly Costs: ${s.currency} ${fixedCosts}
 
 ### Salaries
-${settings.salaries.map((s) => `- ${s.name}: ${settings.currency} ${s.amount}`).join("\n") || "None configured"}
+${s.salaries.map((x) => `- ${x.name}: ${s.currency} ${x.amount}`).join("\n") || "None configured"}
 
 ### Recurring Expenses
-${settings.recurringExpenses.map((e) => `- ${e.name}: ${settings.currency} ${e.amount}`).join("\n") || "None configured"}
+${s.recurringExpenses.map((e) => `- ${e.name}: ${s.currency} ${e.amount}`).join("\n") || "None configured"}
 
-## Financial Data (from Excel)
+## Financial Data
 ${Object.entries(allEntries)
-  .map(([month, entries]) => {
-    const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
-    const expenses = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+  .map(([month, monthEntries]) => {
+    const income = monthEntries.filter((e) => e.type === "income").reduce((sum, e) => sum + e.amount, 0);
+    const expenses = monthEntries.filter((e) => e.type === "expense").reduce((sum, e) => sum + e.amount, 0);
     return `### ${month}
-- Total Income: ${settings.currency} ${income}
-- Total Expenses: ${settings.currency} ${expenses}
-- Net (before fixed costs): ${settings.currency} ${income - expenses}
-- Net (after fixed costs): ${settings.currency} ${income - expenses - fixedCosts}
-- Entries: ${entries.length}
-${entries.map((e) => `  - ${e.date} | ${e.type} | ${e.description} | ${e.category} | ${settings.currency} ${e.amount} | ${e.client}`).join("\n")}`;
+- Total Income: ${s.currency} ${income}
+- Total Expenses: ${s.currency} ${expenses}
+- Net (before fixed costs): ${s.currency} ${income - expenses}
+- Net (after fixed costs): ${s.currency} ${income - expenses - fixedCosts}
+- Entries: ${monthEntries.length}
+${monthEntries.map((e) => `  - ${e.date} | ${e.type} | ${e.description} | ${e.category} | ${s.currency} ${e.amount} | ${e.client}`).join("\n")}`;
   })
   .join("\n\n") || "No data yet"}
 

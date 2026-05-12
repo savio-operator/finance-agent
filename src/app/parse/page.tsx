@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FinanceEntry } from "@/lib/types";
+import { addEntriesToMonth } from "@/lib/storage";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -17,7 +18,6 @@ export default function ParsePage() {
   const [text, setText] = useState("");
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [parsing, setParsing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [targetMonth, setTargetMonth] = useState(getCurrentMonthLabel());
   const [error, setError] = useState("");
@@ -52,17 +52,9 @@ export default function ParsePage() {
     setParsing(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (entries.length === 0) return;
-    setSaving(true);
-
-    await fetch("/api/entries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month: targetMonth, entries }),
-    });
-
-    setSaving(false);
+    addEntriesToMonth(targetMonth, entries);
     setSaved(true);
   };
 
@@ -130,10 +122,10 @@ Transfer of $1,500 to John for freelance work on May 5th"
               {saved && <span className="text-green-600 text-sm font-medium">Saved to {targetMonth}!</span>}
               <button
                 onClick={handleSave}
-                disabled={saving || saved}
+                disabled={saved}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Saving..." : saved ? "Saved!" : `Save All to ${targetMonth}`}
+                {saved ? "Saved!" : `Save All to ${targetMonth}`}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { getAllEntries, getSettings } from "@/lib/storage";
 
 interface Message {
   role: "user" | "assistant";
@@ -39,7 +40,12 @@ export default function AdvisorPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updatedMessages, includeNotion }),
+        body: JSON.stringify({
+          messages: updatedMessages,
+          includeNotion,
+          entries: getAllEntries(),
+          settings: getSettings(),
+        }),
       });
       const data = await res.json();
       setMessages([...updatedMessages, { role: "assistant", content: data.message }]);
@@ -54,7 +60,6 @@ export default function AdvisorPage() {
     if (messages.length === 0) return;
     setLoading(true);
 
-    // Ask the AI to generate a monthly report
     const reportMessages: Message[] = [
       ...messages,
       { role: "user", content: "Please generate a concise monthly financial report summary suitable for writing to Notion. Include key metrics, highlights, concerns, and recommendations." },
@@ -64,11 +69,15 @@ export default function AdvisorPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: reportMessages, includeNotion }),
+        body: JSON.stringify({
+          messages: reportMessages,
+          includeNotion,
+          entries: getAllEntries(),
+          settings: getSettings(),
+        }),
       });
       const data = await res.json();
 
-      // Write to Notion
       const now = new Date();
       const title = `Financial Report - ${now.toLocaleDateString("en-US", { month: "long", year: "numeric" })}`;
       const notionRes = await fetch("/api/notion", {

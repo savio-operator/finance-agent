@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Settings, FinanceEntry } from "@/lib/types";
+import { getSettings, getAllEntries, getTotalFixedCosts } from "@/lib/storage";
 
 export default function Dashboard() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -10,14 +11,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/settings").then((r) => r.json()),
-      fetch("/api/entries").then((r) => r.json()),
-    ]).then(([s, e]) => {
-      setSettings(s);
-      setAllEntries(e.allEntries || {});
-      setLoading(false);
-    });
+    setSettings(getSettings());
+    setAllEntries(getAllEntries());
+    setLoading(false);
   }, []);
 
   if (loading || !settings) {
@@ -28,7 +24,7 @@ export default function Dashboard() {
   const currentEntries = allEntries[currentMonth] || [];
   const totalIncome = currentEntries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const totalExpenses = currentEntries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-  const fixedCosts = settings.salaries.reduce((s, e) => s + e.amount, 0) + settings.recurringExpenses.reduce((s, e) => s + e.amount, 0);
+  const fixedCosts = getTotalFixedCosts(settings);
   const netPL = totalIncome - totalExpenses - fixedCosts;
 
   const monthCount = Object.keys(allEntries).length;

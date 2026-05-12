@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { FinanceEntry, Settings } from "@/lib/types";
+import { getSettings, getEntriesForMonth, addEntriesToMonth, getTotalFixedCosts } from "@/lib/storage";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -28,40 +29,31 @@ export default function MonthlyPage() {
     client: "",
   });
 
-  const fetchData = async (month: string) => {
+  const loadData = useCallback((month: string) => {
     setLoading(true);
-    const [entryRes, settingsRes] = await Promise.all([
-      fetch(`/api/entries?month=${encodeURIComponent(month)}`).then((r) => r.json()),
-      fetch("/api/settings").then((r) => r.json()),
-    ]);
-    setEntries(entryRes.entries || []);
-    setSettings(settingsRes);
+    setEntries(getEntriesForMonth(month));
+    setSettings(getSettings());
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData(selectedMonth);
-  }, [selectedMonth]);
+    loadData(selectedMonth);
+  }, [selectedMonth, loadData]);
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!newEntry.description || !newEntry.amount) return;
-    await fetch("/api/entries", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month: selectedMonth, entries: [newEntry] }),
-    });
+    addEntriesToMonth(selectedMonth, [newEntry]);
     setNewEntry({ date: new Date().toISOString().split("T")[0], type: "income", description: "", category: "", amount: 0, client: "" });
     setShowForm(false);
-    fetchData(selectedMonth);
+    loadData(selectedMonth);
   };
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expenses = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-  const fixedCosts = settings ? settings.salaries.reduce((s, e) => s + e.amount, 0) + settings.recurringExpenses.reduce((s, e) => s + e.amount, 0) : 0;
+  const fixedCosts = settings ? getTotalFixedCosts(settings) : 0;
   const net = income - expenses - fixedCosts;
-  const currency = settings?.currency || "USD";
+  const currency = settings?.currency || "INR";
 
-  // Generate month options for the current year
   const year = new Date().getFullYear();
   const monthOptions = MONTHS.map((m) => `${m} ${year}`);
 

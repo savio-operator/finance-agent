@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FinanceEntry, Settings } from "@/lib/types";
+import { getSettings, getAllEntries, getTotalFixedCosts } from "@/lib/storage";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -15,14 +16,9 @@ export default function YearlyPage() {
   const [year, setYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/entries").then((r) => r.json()),
-      fetch("/api/settings").then((r) => r.json()),
-    ]).then(([e, s]) => {
-      setAllEntries(e.allEntries || {});
-      setSettings(s);
-      setLoading(false);
-    });
+    setAllEntries(getAllEntries());
+    setSettings(getSettings());
+    setLoading(false);
   }, []);
 
   if (loading || !settings) {
@@ -30,7 +26,7 @@ export default function YearlyPage() {
   }
 
   const currency = settings.currency;
-  const fixedCosts = settings.salaries.reduce((s, e) => s + e.amount, 0) + settings.recurringExpenses.reduce((s, e) => s + e.amount, 0);
+  const fixedCosts = getTotalFixedCosts(settings);
 
   const monthData = MONTHS.map((month) => {
     const key = `${month} ${year}`;
@@ -41,14 +37,12 @@ export default function YearlyPage() {
     return { month, key, income, expenses, fixedCosts, net, hasData: entries.length > 0 };
   });
 
-  // Running balance
   let running = 0;
   const withBalance = monthData.map((m) => {
     running += m.net;
     return { ...m, balance: running };
   });
 
-  // Projections
   const monthsWithData = monthData.filter((m) => m.hasData);
   const avgIncome = monthsWithData.length > 0 ? monthsWithData.reduce((s, m) => s + m.income, 0) / monthsWithData.length : 0;
   const avgExpenses = monthsWithData.length > 0 ? monthsWithData.reduce((s, m) => s + m.expenses, 0) / monthsWithData.length : 0;
@@ -74,7 +68,6 @@ export default function YearlyPage() {
         </div>
       </div>
 
-      {/* Projection Cards */}
       <div className="grid grid-cols-4 gap-4 mt-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500">Months Logged</p>
@@ -95,7 +88,6 @@ export default function YearlyPage() {
         </div>
       </div>
 
-      {/* Year Table */}
       <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full">
           <thead>
@@ -123,7 +115,6 @@ export default function YearlyPage() {
                 </td>
               </tr>
             ))}
-            {/* Totals Row */}
             <tr className="bg-slate-50 font-bold">
               <td className="px-4 py-3 text-sm text-slate-900">Total</td>
               <td className="px-4 py-3 text-sm text-right text-green-700">{currency} {totalIncome.toLocaleString()}</td>

@@ -2,31 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { Settings } from "@/lib/types";
+import { getSettings, saveSettings } from "@/lib/storage";
 
 export default function SetupPage() {
   const [settings, setSettings] = useState<Settings>({
     expectedMonthlyIncome: 0,
     salaries: [],
     recurringExpenses: [],
-    currency: "USD",
+    currency: "INR",
   });
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then(setSettings);
+    setSettings(getSettings());
   }, []);
 
-  const save = async () => {
-    setSaving(true);
-    await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
-    });
-    setSaving(false);
+  const save = () => {
+    saveSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -177,10 +169,9 @@ export default function SetupPage() {
             </div>
             <button
               onClick={save}
-              disabled={saving}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors"
             >
-              {saving ? "Saving..." : saved ? "Saved!" : "Save Settings"}
+              {saved ? "Saved!" : "Save Settings"}
             </button>
           </div>
         </div>
