@@ -25,7 +25,11 @@ function ensureWorkbook(): XLSX.WorkBook {
   const monthName = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const ws = XLSX.utils.json_to_sheet([], { header: ["Date", "Type", "Description", "Category", "Amount", "Client"] });
   XLSX.utils.book_append_sheet(wb, ws, monthName);
-  writeWorkbook(wb);
+  try {
+    writeWorkbook(wb);
+  } catch {
+    // Vercel has a read-only filesystem; skip writing
+  }
   return wb;
 }
 
@@ -83,7 +87,11 @@ export function addEntriesToMonth(month: string, entries: FinanceEntry[]): void 
     XLSX.utils.book_append_sheet(wb, ws, month);
   }
 
-  writeWorkbook(wb);
+  try {
+    writeWorkbook(wb);
+  } catch {
+    // Vercel has a read-only filesystem; skip writing
+  }
 }
 
 export function getAllEntries(): Record<string, FinanceEntry[]> {
