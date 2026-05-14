@@ -54,6 +54,35 @@ export default function MonthlyPage() {
   const net = income - expenses - fixedCosts;
   const currency = settings?.currency || "INR";
 
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadReport = async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month: selectedMonth,
+          entries,
+          settings: settings || { expectedMonthlyIncome: 0, salaries: [], recurringExpenses: [], currency: "INR" },
+        }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Adchemy_Report_${selectedMonth.replace(/\s+/g, "_")}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to generate report");
+    }
+    setDownloading(false);
+  };
+
   const year = new Date().getFullYear();
   const monthOptions = MONTHS.map((m) => `${m} ${year}`);
 
@@ -64,12 +93,24 @@ export default function MonthlyPage() {
           <h1 className="text-3xl font-bold text-slate-900">Monthly View</h1>
           <p className="text-slate-500 mt-1">Track income and expenses by month</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors"
-        >
-          + Add Entry
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={downloadReport}
+            disabled={downloading || entries.length === 0}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {downloading ? "Generating..." : "Download Report"}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors"
+          >
+            + Add Entry
+          </button>
+        </div>
       </div>
 
       {/* Month Selector */}

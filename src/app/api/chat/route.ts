@@ -69,7 +69,7 @@ You can help with:
 Be specific with numbers and reference actual data. Format currency amounts clearly.`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: systemPrompt,
     messages: messages.map((m: { role: string; content: string }) => ({
