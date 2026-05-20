@@ -50,6 +50,26 @@ export function addEntriesToMonth(month: string, entries: FinanceEntry[]): void 
   localStorage.setItem(ENTRIES_KEY, JSON.stringify(all));
 }
 
+export function updateEntryInMonth(month: string, index: number, updated: FinanceEntry): void {
+  const all = getAllEntries();
+  const entries = all[month] || [];
+  if (index < 0 || index >= entries.length) return;
+  entries[index] = updated;
+  all[month] = entries;
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ENTRIES_KEY, JSON.stringify(all));
+}
+
+export function deleteEntryFromMonth(month: string, index: number): void {
+  const all = getAllEntries();
+  const entries = all[month] || [];
+  if (index < 0 || index >= entries.length) return;
+  entries.splice(index, 1);
+  all[month] = entries;
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ENTRIES_KEY, JSON.stringify(all));
+}
+
 export function getSheetNames(): string[] {
   return Object.keys(getAllEntries());
 }
