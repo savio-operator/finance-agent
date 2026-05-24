@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { getAllEntries, getSettings } from "@/lib/storage";
+import { getAllEntries, getSettings, getAllMonthlyFixedCosts } from "@/lib/storage";
 
 interface Message {
   role: "user" | "assistant";
@@ -45,6 +45,7 @@ export default function AdvisorPage() {
           includeNotion,
           entries: getAllEntries(),
           settings: getSettings(),
+          allMonthlyFixedCosts: getAllMonthlyFixedCosts(),
         }),
       });
       const data = await res.json();
@@ -74,6 +75,7 @@ export default function AdvisorPage() {
           includeNotion,
           entries: getAllEntries(),
           settings: getSettings(),
+          allMonthlyFixedCosts: getAllMonthlyFixedCosts(),
         }),
       });
       const data = await res.json();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { readNotionPage } from "@/lib/notion";
-import { FinanceEntry, Settings } from "@/lib/types";
+import { FinanceEntry, Settings, MonthlyFixedCosts } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,19 +9,29 @@ export const runtime = "nodejs";
 const client = new Anthropic();
 
 export async function POST(req: Request) {
-  const { messages, includeNotion, entries, settings } = await req.json() as {
+  const { messages, includeNotion, entries, settings, allMonthlyFixedCosts } = await req.json() as {
     messages: { role: string; content: string }[];
     includeNotion?: boolean;
     entries?: Record<string, FinanceEntry[]>;
     settings?: Settings;
+    allMonthlyFixedCosts?: Record<string, MonthlyFixedCosts>;
   };
 
   const allEntries: Record<string, FinanceEntry[]> = entries || {};
   const s: Settings = settings || { expectedMonthlyIncome: 0, salaries: [], recurringExpenses: [], currency: "INR" };
+  const monthOverrides: Record<string, MonthlyFixedCosts> = allMonthlyFixedCosts || {};
 
-  const salaryTotal = s.salaries.reduce((sum, x) => sum + x.amount, 0);
-  const expenseTotal = s.recurringExpenses.reduce((sum, x) => sum + x.amount, 0);
-  const fixedCosts = salaryTotal + expenseTotal;
+  const defaultSalaryTotal = s.salaries.reduce((sum, x) => sum + x.amount, 0);
+  const defaultExpenseTotal = s.recurringExpenses.reduce((sum, x) => sum + x.amount, 0);
+  const defaultFixedCosts = defaultSalaryTotal + defaultExpenseTotal;
+
+  const getMonthFixedCosts = (month: string) => {
+    const override = monthOverrides[month];
+    if (override) {
+      return override.salaries.reduce((sum, x) => sum + x.amount, 0) + override.recurringExpenses.reduce((sum, x) => sum + x.amount, 0);
+    }
+    return defaultFixedCosts;
+  };
 
   let notionContent = "";
   if (includeNotion && process.env.NOTION_FINANCE_PAGE_ID) {
@@ -33,7 +43,7 @@ export async function POST(req: Request) {
 ## Settings
 - Expected Monthly Income: ${s.currency} ${s.expectedMonthlyIncome}
 - Currency: ${s.currency}
-- Total Fixed Monthly Costs: ${s.currency} ${fixedCosts}
+- Default Fixed Monthly Costs: ${s.currency} ${defaultFixedCosts} (may vary per month)
 
 ### Salaries
 ${s.salaries.map((x) => `- ${x.name}: ${s.currency} ${x.amount}`).join("\n") || "None configured"}
@@ -46,11 +56,13 @@ ${Object.entries(allEntries)
   .map(([month, monthEntries]) => {
     const income = monthEntries.filter((e) => e.type === "income").reduce((sum, e) => sum + e.amount, 0);
     const expenses = monthEntries.filter((e) => e.type === "expense").reduce((sum, e) => sum + e.amount, 0);
+    const monthFixed = getMonthFixedCosts(month);
     return `### ${month}
 - Total Income: ${s.currency} ${income}
 - Total Expenses: ${s.currency} ${expenses}
+- Fixed Costs: ${s.currency} ${monthFixed}
 - Net (before fixed costs): ${s.currency} ${income - expenses}
-- Net (after fixed costs): ${s.currency} ${income - expenses - fixedCosts}
+- Net (after fixed costs): ${s.currency} ${income - expenses - monthFixed}
 - Entries: ${monthEntries.length}
 ${monthEntries.map((e) => `  - ${e.date} | ${e.type} | ${e.description} | ${e.category} | ${s.currency} ${e.amount} | ${e.client}`).join("\n")}`;
   })

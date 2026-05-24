@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FinanceEntry, Settings } from "@/lib/types";
-import { getSettings, getAllEntries, getTotalFixedCosts } from "@/lib/storage";
+import { getSettings, getAllEntries, getTotalFixedCostsForMonth } from "@/lib/storage";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -26,15 +26,15 @@ export default function YearlyPage() {
   }
 
   const currency = settings.currency;
-  const fixedCosts = getTotalFixedCosts(settings);
 
   const monthData = MONTHS.map((month) => {
     const key = `${month} ${year}`;
     const entries = allEntries[key] || [];
     const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
     const expenses = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-    const net = income - expenses - fixedCosts;
-    return { month, key, income, expenses, fixedCosts, net, hasData: entries.length > 0 };
+    const monthFixedCosts = getTotalFixedCostsForMonth(key, settings);
+    const net = income - expenses - monthFixedCosts;
+    return { month, key, income, expenses, fixedCosts: monthFixedCosts, net, hasData: entries.length > 0 };
   });
 
   let running = 0;
@@ -46,12 +46,14 @@ export default function YearlyPage() {
   const monthsWithData = monthData.filter((m) => m.hasData);
   const avgIncome = monthsWithData.length > 0 ? monthsWithData.reduce((s, m) => s + m.income, 0) / monthsWithData.length : 0;
   const avgExpenses = monthsWithData.length > 0 ? monthsWithData.reduce((s, m) => s + m.expenses, 0) / monthsWithData.length : 0;
-  const avgNet = avgIncome - avgExpenses - fixedCosts;
+  const avgFixedCosts = monthsWithData.length > 0 ? monthsWithData.reduce((s, m) => s + m.fixedCosts, 0) / monthsWithData.length : 0;
+  const avgNet = avgIncome - avgExpenses - avgFixedCosts;
   const monthsRemaining = 12 - monthsWithData.length;
   const projectedYearEnd = running + avgNet * monthsRemaining;
 
   const totalIncome = monthData.reduce((s, m) => s + m.income, 0);
   const totalExpenses = monthData.reduce((s, m) => s + m.expenses, 0);
+  const totalFixedCosts = monthData.reduce((s, m) => s + m.fixedCosts, 0);
   const totalNet = monthData.reduce((s, m) => s + m.net, 0);
 
   return (
@@ -119,7 +121,7 @@ export default function YearlyPage() {
               <td className="px-4 py-3 text-sm text-slate-900">Total</td>
               <td className="px-4 py-3 text-sm text-right text-green-700">{currency} {totalIncome.toLocaleString()}</td>
               <td className="px-4 py-3 text-sm text-right text-red-700">{currency} {totalExpenses.toLocaleString()}</td>
-              <td className="px-4 py-3 text-sm text-right text-orange-700">{currency} {(fixedCosts * 12).toLocaleString()}</td>
+              <td className="px-4 py-3 text-sm text-right text-orange-700">{currency} {totalFixedCosts.toLocaleString()}</td>
               <td className={`px-4 py-3 text-sm text-right ${totalNet >= 0 ? "text-green-700" : "text-red-700"}`}>{currency} {totalNet.toLocaleString()}</td>
               <td className="px-4 py-3 text-sm text-right">{currency} {running.toLocaleString()}</td>
             </tr>

@@ -14,6 +14,11 @@ export interface Settings {
   currency: string;
 }
 
+export interface MonthlyFixedCosts {
+  salaries: { name: string; amount: number }[];
+  recurringExpenses: { name: string; amount: number }[];
+}
+
 export interface MonthSummary {
   month: string;
   income: number;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { FinanceEntry, Settings } from "@/lib/types";
-import { getSettings, getEntriesForMonth, addEntriesToMonth, updateEntryInMonth, deleteEntryFromMonth, getTotalFixedCosts } from "@/lib/storage";
+import { FinanceEntry, Settings, MonthlyFixedCosts } from "@/lib/types";
+import { getSettings, getEntriesForMonth, addEntriesToMonth, updateEntryInMonth, deleteEntryFromMonth, getFixedCostsForMonth, saveFixedCostsForMonth } from "@/lib/storage";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -31,6 +31,8 @@ export default function MonthlyPage() {
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editEntry, setEditEntry] = useState<FinanceEntry>({ date: "", type: "income", description: "", category: "", amount: 0, client: "" });
+  const [showFixedCosts, setShowFixedCosts] = useState(false);
+  const [monthFixedCosts, setMonthFixedCosts] = useState<MonthlyFixedCosts>({ salaries: [], recurringExpenses: [] });
 
   const handleEdit = (index: number) => {
     setEditingIndex(index);
@@ -54,8 +56,10 @@ export default function MonthlyPage() {
 
   const loadData = useCallback((month: string) => {
     setLoading(true);
+    const s = getSettings();
     setEntries(getEntriesForMonth(month));
-    setSettings(getSettings());
+    setSettings(s);
+    setMonthFixedCosts(getFixedCostsForMonth(month, s));
     setLoading(false);
   }, []);
 
@@ -73,7 +77,7 @@ export default function MonthlyPage() {
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expenses = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-  const fixedCosts = settings ? getTotalFixedCosts(settings) : 0;
+  const fixedCosts = monthFixedCosts.salaries.reduce((s, x) => s + x.amount, 0) + monthFixedCosts.recurringExpenses.reduce((s, x) => s + x.amount, 0);
   const net = income - expenses - fixedCosts;
   const currency = settings?.currency || "INR";
 
@@ -89,6 +93,7 @@ export default function MonthlyPage() {
           month: selectedMonth,
           entries,
           settings: settings || { expectedMonthlyIncome: 0, salaries: [], recurringExpenses: [], currency: "INR" },
+          monthlyFixedCosts: monthFixedCosts,
         }),
       });
       const blob = await res.blob();
@@ -207,15 +212,97 @@ export default function MonthlyPage() {
           <p className="text-xs text-slate-500">Variable Expenses</p>
           <p className="text-xl font-bold text-red-600 mt-1">{currency} {expenses.toLocaleString()}</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-xs text-slate-500">Fixed Costs</p>
+        <button onClick={() => setShowFixedCosts(!showFixedCosts)} className="bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-orange-300 transition-colors">
+          <p className="text-xs text-slate-500">Fixed Costs <span className="text-orange-400">(click to edit)</span></p>
           <p className="text-xl font-bold text-orange-600 mt-1">{currency} {fixedCosts.toLocaleString()}</p>
-        </div>
+        </button>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs text-slate-500">Net P&L</p>
           <p className={`text-xl font-bold mt-1 ${net >= 0 ? "text-green-600" : "text-red-600"}`}>{currency} {net.toLocaleString()}</p>
         </div>
       </div>
+
+      {/* Per-Month Fixed Costs Editor */}
+      {showFixedCosts && (
+        <div className="mt-4 bg-white rounded-xl border border-orange-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Fixed Costs for {selectedMonth}</h3>
+              <p className="text-xs text-slate-400 mt-0.5">These values are specific to this month. Changes here won&apos;t affect other months.</p>
+            </div>
+            <button onClick={() => {
+              if (settings) {
+                setMonthFixedCosts({ salaries: settings.salaries.map(s => ({ ...s })), recurringExpenses: settings.recurringExpenses.map(e => ({ ...e })) });
+              }
+            }} className="px-3 py-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg">
+              Reset to Default
+            </button>
+          </div>
+
+          {/* Salaries */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-slate-600 uppercase">Salaries</p>
+              <button onClick={() => setMonthFixedCosts({ ...monthFixedCosts, salaries: [...monthFixedCosts.salaries, { name: "", amount: 0 }] })}
+                className="text-xs text-blue-600 hover:text-blue-800">+ Add</button>
+            </div>
+            {monthFixedCosts.salaries.map((s, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <input type="text" value={s.name} onChange={(e) => {
+                  const updated = [...monthFixedCosts.salaries];
+                  updated[i] = { ...updated[i], name: e.target.value };
+                  setMonthFixedCosts({ ...monthFixedCosts, salaries: updated });
+                }} placeholder="Name" className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="number" value={s.amount || ""} onChange={(e) => {
+                  const updated = [...monthFixedCosts.salaries];
+                  updated[i] = { ...updated[i], amount: Number(e.target.value) };
+                  setMonthFixedCosts({ ...monthFixedCosts, salaries: updated });
+                }} placeholder="Amount" className="w-28 px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button onClick={() => setMonthFixedCosts({ ...monthFixedCosts, salaries: monthFixedCosts.salaries.filter((_, idx) => idx !== i) })}
+                  className="p-1 text-red-400 hover:text-red-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </div>
+            ))}
+            {monthFixedCosts.salaries.length === 0 && <p className="text-xs text-slate-400">No salaries</p>}
+          </div>
+
+          {/* Recurring Expenses */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-slate-600 uppercase">Recurring Expenses</p>
+              <button onClick={() => setMonthFixedCosts({ ...monthFixedCosts, recurringExpenses: [...monthFixedCosts.recurringExpenses, { name: "", amount: 0 }] })}
+                className="text-xs text-blue-600 hover:text-blue-800">+ Add</button>
+            </div>
+            {monthFixedCosts.recurringExpenses.map((e, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <input type="text" value={e.name} onChange={(ev) => {
+                  const updated = [...monthFixedCosts.recurringExpenses];
+                  updated[i] = { ...updated[i], name: ev.target.value };
+                  setMonthFixedCosts({ ...monthFixedCosts, recurringExpenses: updated });
+                }} placeholder="Name" className="flex-1 px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="number" value={e.amount || ""} onChange={(ev) => {
+                  const updated = [...monthFixedCosts.recurringExpenses];
+                  updated[i] = { ...updated[i], amount: Number(ev.target.value) };
+                  setMonthFixedCosts({ ...monthFixedCosts, recurringExpenses: updated });
+                }} placeholder="Amount" className="w-28 px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button onClick={() => setMonthFixedCosts({ ...monthFixedCosts, recurringExpenses: monthFixedCosts.recurringExpenses.filter((_, idx) => idx !== i) })}
+                  className="p-1 text-red-400 hover:text-red-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </div>
+            ))}
+            {monthFixedCosts.recurringExpenses.length === 0 && <p className="text-xs text-slate-400">No recurring expenses</p>}
+          </div>
+
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            <p className="text-sm font-medium text-slate-700">Total: {currency} {fixedCosts.toLocaleString()}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowFixedCosts(false)} className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+              <button onClick={() => {
+                saveFixedCostsForMonth(selectedMonth, monthFixedCosts);
+                setShowFixedCosts(false);
+              }} className="px-4 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">Save for {selectedMonth.split(" ")[0]}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Entries Table */}
       <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden">

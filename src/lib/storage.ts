@@ -1,7 +1,8 @@
-import { FinanceEntry, Settings } from "./types";
+import { FinanceEntry, Settings, MonthlyFixedCosts } from "./types";
 
 const ENTRIES_KEY = "adchemy_entries";
 const SETTINGS_KEY = "adchemy_settings";
+const MONTHLY_FIXED_COSTS_KEY = "adchemy_monthly_fixed_costs";
 
 const DEFAULT_SETTINGS: Settings = {
   expectedMonthlyIncome: 0,
@@ -77,5 +78,36 @@ export function getSheetNames(): string[] {
 export function getTotalFixedCosts(settings: Settings): number {
   const salaryTotal = settings.salaries.reduce((sum, s) => sum + s.amount, 0);
   const expenseTotal = settings.recurringExpenses.reduce((sum, e) => sum + e.amount, 0);
+  return salaryTotal + expenseTotal;
+}
+
+export function getAllMonthlyFixedCosts(): Record<string, MonthlyFixedCosts> {
+  if (typeof window === "undefined") return {};
+  const stored = localStorage.getItem(MONTHLY_FIXED_COSTS_KEY);
+  if (!stored) return {};
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return {};
+  }
+}
+
+export function getFixedCostsForMonth(month: string, settings: Settings): MonthlyFixedCosts {
+  const all = getAllMonthlyFixedCosts();
+  if (all[month]) return all[month];
+  return { salaries: settings.salaries, recurringExpenses: settings.recurringExpenses };
+}
+
+export function saveFixedCostsForMonth(month: string, costs: MonthlyFixedCosts): void {
+  if (typeof window === "undefined") return;
+  const all = getAllMonthlyFixedCosts();
+  all[month] = costs;
+  localStorage.setItem(MONTHLY_FIXED_COSTS_KEY, JSON.stringify(all));
+}
+
+export function getTotalFixedCostsForMonth(month: string, settings: Settings): number {
+  const costs = getFixedCostsForMonth(month, settings);
+  const salaryTotal = costs.salaries.reduce((sum, s) => sum + s.amount, 0);
+  const expenseTotal = costs.recurringExpenses.reduce((sum, e) => sum + e.amount, 0);
   return salaryTotal + expenseTotal;
 }

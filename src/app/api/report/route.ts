@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { FinanceEntry, Settings } from "@/lib/types";
+import { FinanceEntry, Settings, MonthlyFixedCosts } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  const { month, entries, settings } = (await req.json()) as {
+  const { month, entries, settings, monthlyFixedCosts } = (await req.json()) as {
     month: string;
     entries: FinanceEntry[];
     settings: Settings;
+    monthlyFixedCosts?: MonthlyFixedCosts;
   };
 
   const currency = settings.currency || "INR";
-  const salaryTotal = settings.salaries.reduce((s, x) => s + x.amount, 0);
-  const expenseTotal = settings.recurringExpenses.reduce((s, x) => s + x.amount, 0);
+  const costs = monthlyFixedCosts || { salaries: settings.salaries, recurringExpenses: settings.recurringExpenses };
+  const salaryTotal = costs.salaries.reduce((s, x) => s + x.amount, 0);
+  const expenseTotal = costs.recurringExpenses.reduce((s, x) => s + x.amount, 0);
   const fixedCosts = salaryTotal + expenseTotal;
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
@@ -36,8 +38,8 @@ export async function POST(req: NextRequest) {
     ["Total Variable Expenses", variableExpenses],
     ["", ""],
     ["FIXED COSTS", ""],
-    ...settings.salaries.map((s) => [`Salary: ${s.name}`, s.amount]),
-    ...settings.recurringExpenses.map((e) => [`Recurring: ${e.name}`, e.amount]),
+    ...costs.salaries.map((s) => [`Salary: ${s.name}`, s.amount]),
+    ...costs.recurringExpenses.map((e) => [`Recurring: ${e.name}`, e.amount]),
     ["Total Fixed Costs", fixedCosts],
     ["", ""],
     ["NET P&L", net],
